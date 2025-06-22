@@ -19,6 +19,15 @@ let package = Package(
         .executable(
             name: "ComprehensiveExample",
             targets: ["ComprehensiveExample"]),
+        .executable(
+            name: "TTSExample",
+            targets: ["TTSExample"]),
+        .executable(
+            name: "ExpressionMeasurementExample",
+            targets: ["ExpressionMeasurementExample"]),
+        .executable(
+            name: "EVIExample",
+            targets: ["EVIExample"]),
     ],
     dependencies: [
         // No external dependencies - using only Foundation and system frameworks
@@ -31,6 +40,12 @@ let package = Package(
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency")
             ]
+        ),
+        .target(
+            name: "ExampleUtils",
+            dependencies: [],
+            path: "Examples",
+            sources: ["EnvLoader.swift"]
         ),
         .testTarget(
             name: "HumeSDKTests",
@@ -48,6 +63,24 @@ let package = Package(
             dependencies: ["HumeSDK"],
             path: "Examples",
             sources: ["ComprehensiveExample.swift"]
+        ),
+        .executableTarget(
+            name: "TTSExample",
+            dependencies: ["HumeSDK", "ExampleUtils"],
+            path: "Examples",
+            sources: ["TTSExample.swift"]
+        ),
+        .executableTarget(
+            name: "ExpressionMeasurementExample",
+            dependencies: ["HumeSDK", "ExampleUtils"],
+            path: "Examples",
+            sources: ["ExpressionMeasurementExample.swift"]
+        ),
+        .executableTarget(
+            name: "EVIExample",
+            dependencies: ["HumeSDK", "ExampleUtils"],
+            path: "Examples",
+            sources: ["EVIExample.swift"]
         ),
     ]
 )

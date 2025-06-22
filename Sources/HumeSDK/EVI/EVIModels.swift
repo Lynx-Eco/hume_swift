@@ -84,7 +84,7 @@ public struct SessionSettings: ChatMessage, Sendable {
     public let systemPrompt: String?
     public let temperature: Double?
     public let maxTokens: Int?
-    public let audioEncoding: AudioEncoding?
+    public let audioEncoding: EVIAudioEncoding?
     public let sampleRate: Int?
     public let channelCount: Int?
     public let language: Language?
@@ -93,7 +93,7 @@ public struct SessionSettings: ChatMessage, Sendable {
         systemPrompt: String? = nil,
         temperature: Double? = nil,
         maxTokens: Int? = nil,
-        audioEncoding: AudioEncoding? = nil,
+        audioEncoding: EVIAudioEncoding? = nil,
         sampleRate: Int? = nil,
         channelCount: Int? = nil,
         language: Language? = nil
@@ -451,8 +451,8 @@ public struct ToolsResponse: Codable, Sendable {
 
 // MARK: - Enums
 
-/// Audio encoding types
-public enum AudioEncoding: String, Codable, Sendable {
+/// Audio encoding types for EVI
+public enum EVIAudioEncoding: String, Codable, Sendable {
     case pcmLinear16 = "pcm_linear16"
     case mulaw = "mulaw"
 }

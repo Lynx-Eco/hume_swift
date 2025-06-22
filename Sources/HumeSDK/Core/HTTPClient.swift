@@ -250,6 +250,7 @@ public actor HTTPClient {
         // Add authentication
         let auth = try await authProvider.getAuthentication()
         request.setValue(auth.headerValue, forHTTPHeaderField: auth.headerField)
+        print("[DEBUG] Auth header: \(auth.headerField) = \(auth.headerValue.prefix(20))...")
         
         // Add custom headers
         if let headers = effectiveOptions.headers {
@@ -306,6 +307,7 @@ public actor HTTPClient {
                 
                 // Log response
                 logger.debug("Response: \(httpResponse.statusCode) for \(request.url?.absoluteString ?? "")")
+                print("[DEBUG] Request to: \(request.url?.absoluteString ?? "unknown") returned \(httpResponse.statusCode)")
                 
                 // Check for success
                 if (200..<300).contains(httpResponse.statusCode) {

@@ -16,7 +16,7 @@ public class TTSClient {
         options: RequestOptions? = nil
     ) async throws -> TTSResponse {
         return try await client.http.post(
-            "/v1/tts",
+            "/v0/tts",
             body: request,
             responseType: TTSResponse.self,
             options: options
@@ -34,7 +34,7 @@ public class TTSClient {
         modifiedOptions.headers = headers
         
         return try await client.http.postData(
-            "/v1/tts",
+            "/v0/tts",
             body: request,
             options: modifiedOptions
         )
@@ -59,8 +59,7 @@ public class TTSClient {
     ) async throws -> Data {
         let request = TTSRequest(
             text: text,
-            voice: voice,
-            outputFormat: format
+            voice: voice
         )
         return try await synthesizeAudio(request, options: options)
     }
@@ -131,7 +130,7 @@ public class TTSClient {
         ).merged(with: options)
         
         return try await client.http.get(
-            "/v1/tts/voices",
+            "/v0/tts/voices",
             responseType: VoicesResponse.self,
             options: modifiedOptions
         )
@@ -150,11 +149,11 @@ public class TTSClient {
             )
             
             return PagedResponse(
-                pageNumber: response.pageNumber,
-                pageSize: response.pageSize,
-                totalPages: response.totalPages,
-                totalItems: response.totalItems,
-                items: response.voices
+                pageNumber: response.pageNumber ?? 0,
+                pageSize: response.pageSize ?? pageSize,
+                totalPages: response.totalPages ?? 1,
+                totalItems: response.voicesPage.count,
+                items: response.voicesPage
             )
         }
     }
@@ -178,7 +177,7 @@ public class TTSClient {
         let options = RequestOptions(queryParameters: queryParams)
         
         return try await client.http.get(
-            "/v1/tts/voices",
+            "/v0/tts/voices",
             responseType: PagedVoicesResponse.self,
             options: options
         )

@@ -1,8 +1,8 @@
 import Foundation
 
 /// Simple .env file loader
-struct EnvLoader {
-    static func loadEnv() {
+public struct EnvLoader {
+    public static func loadEnv() {
         let fileManager = FileManager.default
         let currentPath = fileManager.currentDirectoryPath
         let envPath = "\(currentPath)/.env"

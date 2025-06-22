@@ -12,13 +12,11 @@ public enum AudioFormat: String, Codable, Sendable {
 /// Audio format details
 public enum AudioFormatDetails: Codable, Sendable {
     case mp3
-    case wav(sampleRate: Int)
-    case pcm(encoding: PCMEncoding, sampleRate: Int)
+    case wav
+    case pcm
     
     private enum CodingKeys: String, CodingKey {
-        case format
-        case sampleRate = "sample_rate"
-        case encoding
+        case type
     }
     
     private enum FormatType: String, Codable {
@@ -32,35 +30,29 @@ public enum AudioFormatDetails: Codable, Sendable {
         
         switch self {
         case .mp3:
-            try container.encode(FormatType.mp3, forKey: .format)
+            try container.encode(FormatType.mp3.rawValue, forKey: .type)
             
-        case .wav(let sampleRate):
-            try container.encode(FormatType.wav, forKey: .format)
-            try container.encode(sampleRate, forKey: .sampleRate)
+        case .wav:
+            try container.encode(FormatType.wav.rawValue, forKey: .type)
             
-        case .pcm(let encoding, let sampleRate):
-            try container.encode(FormatType.pcm, forKey: .format)
-            try container.encode(encoding, forKey: .encoding)
-            try container.encode(sampleRate, forKey: .sampleRate)
+        case .pcm:
+            try container.encode(FormatType.pcm.rawValue, forKey: .type)
         }
     }
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let format = try container.decode(FormatType.self, forKey: .format)
+        let format = try container.decode(FormatType.self, forKey: .type)
         
         switch format {
         case .mp3:
             self = .mp3
             
         case .wav:
-            let sampleRate = try container.decode(Int.self, forKey: .sampleRate)
-            self = .wav(sampleRate: sampleRate)
+            self = .wav
             
         case .pcm:
-            let encoding = try container.decode(PCMEncoding.self, forKey: .encoding)
-            let sampleRate = try container.decode(Int.self, forKey: .sampleRate)
-            self = .pcm(encoding: encoding, sampleRate: sampleRate)
+            self = .pcm
         }
     }
 }
@@ -104,9 +96,11 @@ public struct SampleRate: Codable, Equatable, Sendable {
 
 /// Voice provider
 public enum VoiceProvider: String, Codable, Sendable {
-    case hume = "HUME"
-    case eleven = "ELEVEN"
-    case playht = "PLAYHT"
+    case humeAI = "HUME_AI"
+    case customVoice = "CUSTOM_VOICE"
+    case hume = "HUME" // Legacy
+    case eleven = "ELEVEN" // Legacy
+    case playht = "PLAYHT" // Legacy
 }
 
 /// Voice information
@@ -173,38 +167,85 @@ public enum VoiceSpecification: Codable, Sendable {
 
 // MARK: - TTS Requests
 
-/// TTS synthesis request
-public struct TTSRequest: Codable, Sendable {
+/// Posted utterance for TTS
+public struct PostedUtterance: Codable, Sendable {
     public let text: String
     public let voice: VoiceSpecification?
-    public let outputFormat: AudioFormatDetails?
-    public let sampleRate: SampleRate?
+    public let description: String?
     public let speed: Double?
-    public let volume: Double?
+    public let trailingSilence: Double?
     
     private enum CodingKeys: String, CodingKey {
         case text
         case voice
-        case outputFormat = "output_format"
-        case sampleRate = "sample_rate"
+        case description
         case speed
-        case volume
+        case trailingSilence = "trailing_silence"
     }
     
     public init(
         text: String,
         voice: VoiceSpecification? = nil,
-        outputFormat: AudioFormatDetails? = nil,
-        sampleRate: SampleRate? = nil,
+        description: String? = nil,
         speed: Double? = nil,
-        volume: Double? = nil
+        trailingSilence: Double? = nil
     ) {
         self.text = text
         self.voice = voice
-        self.outputFormat = outputFormat
-        self.sampleRate = sampleRate
+        self.description = description
         self.speed = speed
-        self.volume = volume
+        self.trailingSilence = trailingSilence
+    }
+}
+
+/// TTS synthesis request
+public struct TTSRequest: Codable, Sendable {
+    public let utterances: [PostedUtterance]
+    public let format: AudioFormatDetails?
+    public let numGenerations: Int?
+    public let splitUtterances: Bool?
+    public let stripHeaders: Bool?
+    
+    private enum CodingKeys: String, CodingKey {
+        case utterances
+        case format
+        case numGenerations = "num_generations"
+        case splitUtterances = "split_utterances"
+        case stripHeaders = "strip_headers"
+    }
+    
+    public init(
+        utterances: [PostedUtterance],
+        format: AudioFormatDetails? = nil,
+        numGenerations: Int? = nil,
+        splitUtterances: Bool? = nil,
+        stripHeaders: Bool? = nil
+    ) {
+        self.utterances = utterances
+        self.format = format
+        self.numGenerations = numGenerations
+        self.splitUtterances = splitUtterances
+        self.stripHeaders = stripHeaders
+    }
+    
+    // Convenience init for single utterance
+    public init(
+        text: String,
+        voice: VoiceSpecification? = nil,
+        description: String? = nil,
+        speed: Double? = nil
+    ) {
+        let utterance = PostedUtterance(
+            text: text,
+            voice: voice,
+            description: description,
+            speed: speed
+        )
+        self.utterances = [utterance]
+        self.format = nil
+        self.numGenerations = nil
+        self.splitUtterances = nil
+        self.stripHeaders = nil
     }
 }
 
@@ -212,10 +253,13 @@ public struct TTSRequest: Codable, Sendable {
 public class TTSRequestBuilder {
     private var text: String
     private var voice: VoiceSpecification?
-    private var outputFormat: AudioFormatDetails?
-    private var sampleRate: SampleRate?
+    private var descriptionText: String?
     private var speed: Double?
-    private var volume: Double?
+    private var trailingSilenceValue: Double?
+    private var format: AudioFormatDetails?
+    private var numGenerations: Int?
+    private var splitUtterances: Bool?
+    private var stripHeaders: Bool?
     
     public init(text: String) {
         self.text = text
@@ -241,20 +285,20 @@ public class TTSRequestBuilder {
     
     @discardableResult
     public func outputFormat(_ format: AudioFormatDetails) -> TTSRequestBuilder {
-        self.outputFormat = format
+        self.format = format
         return self
     }
     
     @discardableResult
     public func sampleRate(_ rate: SampleRate) -> TTSRequestBuilder {
-        self.sampleRate = rate
+        // Note: Sample rate is handled by the API based on format type
+        // This is kept for API compatibility but doesn't affect the request
         return self
     }
     
     @discardableResult
     public func sampleRate(_ rate: Int) -> TTSRequestBuilder {
-        self.sampleRate = SampleRate(rate)
-        return self
+        return sampleRate(SampleRate(rate))
     }
     
     @discardableResult
@@ -265,53 +309,131 @@ public class TTSRequestBuilder {
     
     @discardableResult
     public func volume(_ volume: Double) -> TTSRequestBuilder {
-        self.volume = volume
+        // Volume is not directly supported in the API
+        return self
+    }
+    
+    @discardableResult
+    public func description(_ description: String) -> TTSRequestBuilder {
+        self.descriptionText = description
+        return self
+    }
+    
+    @discardableResult
+    public func trailingSilence(_ silence: Double) -> TTSRequestBuilder {
+        self.trailingSilenceValue = silence
         return self
     }
     
     public func build() -> TTSRequest {
-        return TTSRequest(
+        let utterance = PostedUtterance(
             text: text,
             voice: voice,
-            outputFormat: outputFormat,
-            sampleRate: sampleRate,
+            description: descriptionText,
             speed: speed,
-            volume: volume
+            trailingSilence: trailingSilenceValue
+        )
+        
+        return TTSRequest(
+            utterances: [utterance],
+            format: format,
+            numGenerations: nil,
+            splitUtterances: nil,
+            stripHeaders: nil
         )
     }
 }
 
 // MARK: - TTS Responses
 
-/// TTS synthesis response
-public struct TTSResponse: Codable, Sendable {
-    public let audioUrl: String?
-    public let duration: Double?
+/// Snippet in TTS response
+public struct Snippet: Codable, Sendable {
+    public let text: String
+    public let startTime: Double?
+    public let endTime: Double?
     
     private enum CodingKeys: String, CodingKey {
-        case audioUrl = "audio_url"
+        case text
+        case startTime = "start_time"
+        case endTime = "end_time"
+    }
+}
+
+/// Generation in TTS response
+public struct Generation: Codable, Sendable {
+    public let audio: String // Base64 encoded audio
+    public let duration: Double
+    public let encoding: AudioEncoding
+    public let fileSize: Int
+    public let generationId: String
+    public let snippets: [[Snippet]]
+    
+    private enum CodingKeys: String, CodingKey {
+        case audio
         case duration
+        case encoding
+        case fileSize = "file_size"
+        case generationId = "generation_id"
+        case snippets
+    }
+}
+
+/// Audio encoding in response
+public struct AudioEncoding: Codable, Sendable {
+    public let format: String
+    public let sampleRate: Int?
+    public let encoding: String?
+    
+    private enum CodingKeys: String, CodingKey {
+        case format
+        case sampleRate = "sample_rate"
+        case encoding
+    }
+}
+
+/// TTS synthesis response
+public struct TTSResponse: Codable, Sendable {
+    public let generations: [Generation]
+    public let requestId: String?
+    
+    private enum CodingKeys: String, CodingKey {
+        case generations
+        case requestId = "request_id"
+    }
+    
+    // Convenience accessors for first generation
+    public var audioUrl: String? {
+        return nil // JSON response doesn't have URL
+    }
+    
+    public var duration: Double? {
+        return generations.first?.duration
+    }
+    
+    public var audioBase64: String? {
+        return generations.first?.audio
     }
 }
 
 /// Voices list response
 public struct VoicesResponse: Codable, Sendable {
-    public let voices: [Voice]
-}
-
-/// Paged voices response
-public struct PagedVoicesResponse: Codable, Sendable {
-    public let pageNumber: Int
-    public let pageSize: Int
-    public let totalPages: Int
-    public let totalItems: Int
-    public let voices: [Voice]
+    public let pageNumber: Int?
+    public let pageSize: Int?
+    public let totalPages: Int?
+    public let voicesPage: [Voice]
     
     private enum CodingKeys: String, CodingKey {
         case pageNumber = "page_number"
         case pageSize = "page_size"
         case totalPages = "total_pages"
-        case totalItems = "total_items"
-        case voices
+        case voicesPage = "voices_page"
+    }
+    
+    // Convenience accessor
+    public var voices: [Voice] {
+        return voicesPage
     }
 }
+
+/// Paged voices response (alias for internal use)
+public typealias PagedVoicesResponse = VoicesResponse

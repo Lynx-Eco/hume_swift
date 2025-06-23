@@ -28,6 +28,9 @@ let package = Package(
         .executable(
             name: "EVIExample",
             targets: ["EVIExample"]),
+        .executable(
+            name: "EVIConnectionTest",
+            targets: ["EVIConnectionTest"]),
     ],
     dependencies: [
         // No external dependencies - using only Foundation and system frameworks
@@ -81,6 +84,12 @@ let package = Package(
             dependencies: ["HumeSDK", "ExampleUtils"],
             path: "Examples",
             sources: ["EVIExample.swift"]
+        ),
+        .executableTarget(
+            name: "EVIConnectionTest",
+            dependencies: ["HumeSDK", "ExampleUtils"],
+            path: "Examples",
+            sources: ["EVIConnectionTest.swift"]
         ),
     ]
 )

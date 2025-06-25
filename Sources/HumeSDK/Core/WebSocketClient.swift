@@ -25,7 +25,6 @@ public actor WebSocketClient {
     private let authProvider: AuthenticationProvider
     private var task: URLSessionWebSocketTask?
     private var session: URLSession
-    private let logger: Logger
     
     private var connectionState: ConnectionState = .disconnected
     private var messageHandlers: [(Message) async -> Void] = []
@@ -45,7 +44,6 @@ public actor WebSocketClient {
         self.url = url
         self.authProvider = authProvider
         self.session = session ?? URLSession(configuration: .default)
-        self.logger = Logger(subsystem: "ai.hume.sdk", category: "WebSocketClient")
     }
     
     // MARK: - Connection Management
@@ -53,7 +51,9 @@ public actor WebSocketClient {
     /// Connect to the WebSocket
     public func connect() async throws {
         guard connectionState == .disconnected else {
-            logger.warning("Already connected or connecting")
+            if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                Logger.warning("Already connected or connecting")
+            }
             return
         }
         
@@ -91,13 +91,17 @@ public actor WebSocketClient {
         }
         
         connectionState = .connected
-        logger.info("WebSocket connected to \(self.url)")
+        if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+            Logger.info("WebSocket connected to \(self.url)")
+        }
     }
     
     /// Disconnect from the WebSocket
     public func disconnect(reason: String? = nil) async {
         guard connectionState == .connected else {
-            logger.warning("Not connected")
+            if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                Logger.warning("Not connected")
+            }
             return
         }
         
@@ -122,7 +126,9 @@ public actor WebSocketClient {
             await handler(reason)
         }
         
-        logger.info("WebSocket disconnected")
+        if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+            Logger.info("WebSocket disconnected")
+        }
     }
     
     /// Get current connection state
@@ -144,9 +150,13 @@ public actor WebSocketClient {
         
         do {
             try await task.send(.string(text))
-            logger.debug("Sent text message: \(text.prefix(100))...")
+            if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                Logger.debug("Sent text message: \(text.prefix(100))...")
+            }
         } catch {
-            logger.error("Failed to send text message: \(error)")
+            if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                Logger.error("Failed to send text message: \(error)")
+            }
             throw HumeError.webSocketSend(error)
         }
     }
@@ -163,9 +173,13 @@ public actor WebSocketClient {
         
         do {
             try await task.send(.data(data))
-            logger.debug("Sent data message: \(data.count) bytes")
+            if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                Logger.debug("Sent data message: \(data.count) bytes")
+            }
         } catch {
-            logger.error("Failed to send data message: \(error)")
+            if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                Logger.error("Failed to send data message: \(error)")
+            }
             throw HumeError.webSocketSend(error)
         }
     }
@@ -198,7 +212,9 @@ public actor WebSocketClient {
                 await handler(decoded)
             } catch {
                 // Log but don't crash - message might be of different type
-                self.logger.debug("Failed to decode message as \(T.self): \(error)")
+                if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                    Logger.debug("Failed to decode message as \(T.self): \(error)")
+                }
             }
         }
     }
@@ -224,19 +240,27 @@ public actor WebSocketClient {
                 
                 switch message {
                 case .string(let text):
-                    logger.debug("Received text message: \(text.prefix(100))...")
+                    if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                        Logger.debug("Received text message: \(text.prefix(100))...")
+                    }
                     await handleMessage(.text(text))
                     
                 case .data(let data):
-                    logger.debug("Received data message: \(data.count) bytes")
+                    if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                        Logger.debug("Received data message: \(data.count) bytes")
+                    }
                     await handleMessage(.data(data))
                     
                 @unknown default:
-                    logger.warning("Received unknown message type")
+                    if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                        Logger.warning("Received unknown message type")
+                    }
                 }
             } catch {
                 if connectionState == .connected {
-                    logger.error("WebSocket receive error: \(error)")
+                    if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                        Logger.error("WebSocket receive error: \(error)")
+                    }
                     await handleError(error)
                     
                     // Disconnect on error
@@ -255,11 +279,15 @@ public actor WebSocketClient {
                 
                 if let task = task, connectionState == .connected {
                     try await task.sendPing { _ in }
-                    logger.debug("Sent ping")
+                    if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                        Logger.debug("Sent ping")
+                    }
                 }
             } catch {
                 if connectionState == .connected {
-                    logger.error("Ping failed: \(error)")
+                    if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                        Logger.error("Ping failed: \(error)")
+                    }
                 }
             }
         }

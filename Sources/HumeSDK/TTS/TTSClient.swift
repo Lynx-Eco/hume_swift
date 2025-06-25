@@ -46,7 +46,7 @@ public class TTSClient {
         voice: VoiceSpecification? = nil,
         options: RequestOptions? = nil
     ) async throws -> TTSResponse {
-        let request = TTSRequest(text: text, voice: voice)
+        let request = try TTSRequest(text: text, voice: voice)
         return try await synthesize(request, options: options)
     }
     
@@ -57,7 +57,7 @@ public class TTSClient {
         format: AudioFormatDetails = .mp3,
         options: RequestOptions? = nil
     ) async throws -> Data {
-        let request = TTSRequest(
+        let request = try TTSRequest(
             text: text,
             voice: voice
         )
@@ -73,14 +73,53 @@ public class TTSClient {
     ) -> AsyncThrowingStream<TTSStreamChunk, Error> {
         return AsyncThrowingStream<TTSStreamChunk, Error> { continuation in
             Task {
-                var modifiedOptions = options ?? RequestOptions()
-                var headers = modifiedOptions.headers ?? [:]
-                headers["Accept"] = "text/event-stream"
-                modifiedOptions.headers = headers
-                
-                // TODO: Implement streaming response handling
-                // This requires additional work to handle server-sent events
-                continuation.finish(throwing: HumeError.custom(message: "Streaming not yet implemented"))
+                do {
+                    var modifiedOptions = options ?? RequestOptions()
+                    var headers = modifiedOptions.headers ?? [:]
+                    headers["Accept"] = "text/event-stream"
+                    modifiedOptions.headers = headers
+                    
+                    let url = try client.buildURL(path: "/v0/tts/stream")
+                    var urlRequest = URLRequest(url: url)
+                    urlRequest.httpMethod = "POST"
+                    urlRequest.httpBody = try JSONEncoder().encode(request)
+                    urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    
+                    // Add auth header
+                    let auth = try await client.getAuthProvider().getAuthentication()
+                    urlRequest.setValue(auth.headerValue, forHTTPHeaderField: auth.headerField)
+                    
+                    // Add custom headers
+                    for (key, value) in headers {
+                        urlRequest.setValue(value, forHTTPHeaderField: key)
+                    }
+                    
+                    // Create SSE stream
+                    let session = URLSession.shared
+                    let (bytes, response) = try await session.bytes(for: urlRequest)
+                    
+                    guard let httpResponse = response as? HTTPURLResponse,
+                          (200...299).contains(httpResponse.statusCode) else {
+                        throw HumeError.invalidResponse(message: "Invalid HTTP response")
+                    }
+                    
+                    // Parse SSE events
+                    let parser = ServerSentEventsParser()
+                    
+                    for try await chunk in bytes {
+                        let events = await parser.parse(Data([chunk]))
+                        for event in events {
+                            if let data = event.data.data(using: .utf8),
+                               let streamChunk = try? JSONDecoder().decode(TTSStreamChunk.self, from: data) {
+                                continuation.yield(streamChunk)
+                            }
+                        }
+                    }
+                    
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
             }
         }
     }
@@ -92,14 +131,58 @@ public class TTSClient {
     ) -> AsyncThrowingStream<Data, Error> {
         return AsyncThrowingStream<Data, Error> { continuation in
             Task {
-                var modifiedOptions = options ?? RequestOptions()
-                var headers = modifiedOptions.headers ?? [:]
-                headers["Accept"] = "audio/*"
-                headers["Transfer-Encoding"] = "chunked"
-                modifiedOptions.headers = headers
-                
-                // TODO: Implement streaming audio response handling
-                continuation.finish(throwing: HumeError.custom(message: "Audio streaming not yet implemented"))
+                do {
+                    var modifiedOptions = options ?? RequestOptions()
+                    var headers = modifiedOptions.headers ?? [:]
+                    headers["Accept"] = "audio/*"
+                    modifiedOptions.headers = headers
+                    
+                    let url = try client.buildURL(path: "/v0/tts/stream_audio")
+                    var urlRequest = URLRequest(url: url)
+                    urlRequest.httpMethod = "POST"
+                    urlRequest.httpBody = try JSONEncoder().encode(request)
+                    urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    
+                    // Add auth header
+                    let auth = try await client.getAuthProvider().getAuthentication()
+                    urlRequest.setValue(auth.headerValue, forHTTPHeaderField: auth.headerField)
+                    
+                    // Add custom headers
+                    for (key, value) in headers {
+                        urlRequest.setValue(value, forHTTPHeaderField: key)
+                    }
+                    
+                    // Stream audio data
+                    let session = URLSession.shared
+                    let (bytes, response) = try await session.bytes(for: urlRequest)
+                    
+                    guard let httpResponse = response as? HTTPURLResponse,
+                          (200...299).contains(httpResponse.statusCode) else {
+                        throw HumeError.invalidResponse(message: "Invalid HTTP response")
+                    }
+                    
+                    // Collect chunks and yield them
+                    var buffer = Data()
+                    let chunkSize = 4096 // 4KB chunks
+                    
+                    for try await byte in bytes {
+                        buffer.append(byte)
+                        
+                        if buffer.count >= chunkSize {
+                            continuation.yield(buffer)
+                            buffer = Data()
+                        }
+                    }
+                    
+                    // Yield any remaining data
+                    if !buffer.isEmpty {
+                        continuation.yield(buffer)
+                    }
+                    
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
             }
         }
     }
@@ -203,11 +286,3 @@ public extension TTSClient {
     }
 }
 
-// MARK: - Streaming Models
-
-/// TTS stream chunk for JSON streaming
-public struct TTSStreamChunk: Codable, Sendable {
-    public let text: String?
-    public let audio: String? // base64 encoded
-    public let done: Bool?
-}

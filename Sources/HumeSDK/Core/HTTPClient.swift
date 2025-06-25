@@ -10,7 +10,6 @@ public actor HTTPClient {
     private let defaultTimeout: TimeInterval
     private let defaultRetryPolicy: RetryPolicy
     private let session: URLSession
-    private let logger: Logger
     
     /// SDK version for User-Agent header
     private let sdkVersion = "0.9.0"
@@ -29,7 +28,6 @@ public actor HTTPClient {
         self.defaultTimeout = timeout
         self.defaultRetryPolicy = retryPolicy
         self.session = session ?? .shared
-        self.logger = Logger(subsystem: "ai.hume.sdk", category: "HTTPClient")
     }
     
     // MARK: - Public Methods
@@ -250,7 +248,7 @@ public actor HTTPClient {
         // Add authentication
         let auth = try await authProvider.getAuthentication()
         request.setValue(auth.headerValue, forHTTPHeaderField: auth.headerField)
-        print("[DEBUG] Auth header: \(auth.headerField) = \(auth.headerValue.prefix(20))...")
+        // Authentication header added
         
         // Add custom headers
         if let headers = effectiveOptions.headers {
@@ -306,8 +304,10 @@ public actor HTTPClient {
                 }
                 
                 // Log response
-                logger.debug("Response: \(httpResponse.statusCode) for \(request.url?.absoluteString ?? "")")
-                print("[DEBUG] Request to: \(request.url?.absoluteString ?? "unknown") returned \(httpResponse.statusCode)")
+                if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                    Logger.debug("Response: \(httpResponse.statusCode) for \(request.url?.absoluteString ?? "")")
+                }
+                // Request completed with status: httpResponse.statusCode
                 
                 // Check for success
                 if (200..<300).contains(httpResponse.statusCode) {
@@ -332,7 +332,9 @@ public actor HTTPClient {
                             delay = min(retryAfter, 30.0)
                         }
                         
-                        logger.debug("Retrying after \(delay) seconds (attempt \(retryState.attempt))")
+                        if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                            Logger.debug("Retrying after \(delay) seconds (attempt \(retryState.attempt))")
+                        }
                         try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                         continue
                     }
@@ -352,7 +354,9 @@ public actor HTTPClient {
                     
                     if retryState.shouldRetry(with: retryPolicy) {
                         let delay = retryPolicy.delay(for: retryState.attempt)
-                        logger.debug("Retrying after \(delay) seconds (attempt \(retryState.attempt))")
+                        if #available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *) {
+                            Logger.debug("Retrying after \(delay) seconds (attempt \(retryState.attempt))")
+                        }
                         try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                         continue
                     }

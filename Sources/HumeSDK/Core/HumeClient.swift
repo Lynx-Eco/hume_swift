@@ -197,4 +197,12 @@ extension HumeClient {
     internal func getAuthProvider() -> AuthenticationProvider {
         return auth.provider
     }
+    
+    /// Build a full URL for the given path (for internal use)
+    internal func buildURL(path: String) throws -> URL {
+        guard let url = URL(string: path, relativeTo: baseURL) else {
+            throw HumeError.invalidURL(url: path)
+        }
+        return url
+    }
 }

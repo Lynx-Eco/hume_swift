@@ -8,10 +8,10 @@ public enum PaginationDirection: String, Codable, Sendable {
 
 /// Paginated response wrapper
 public struct PagedResponse<T: Codable>: Codable {
-    public let pageNumber: Int
-    public let pageSize: Int
-    public let totalPages: Int
-    public let totalItems: Int
+    public let pageNumber: Int?
+    public let pageSize: Int?
+    public let totalPages: Int?
+    public let totalItems: Int?
     public let items: [T]
     
     private enum CodingKeys: String, CodingKey {
@@ -90,22 +90,26 @@ public struct PaginatedSequence<T: Codable>: AsyncSequence {
 public extension PagedResponse {
     /// Check if there are more pages
     var hasNextPage: Bool {
+        guard let pageNumber = pageNumber, let totalPages = totalPages else { return false }
         return pageNumber < totalPages - 1
     }
     
     /// Check if there are previous pages
     var hasPreviousPage: Bool {
+        guard let pageNumber = pageNumber else { return false }
         return pageNumber > 0
     }
     
     /// Get the next page number
     var nextPageNumber: Int? {
-        return hasNextPage ? pageNumber + 1 : nil
+        guard hasNextPage, let pageNumber = pageNumber else { return nil }
+        return pageNumber + 1
     }
     
     /// Get the previous page number
     var previousPageNumber: Int? {
-        return hasPreviousPage ? pageNumber - 1 : nil
+        guard hasPreviousPage, let pageNumber = pageNumber else { return nil }
+        return pageNumber - 1
     }
 }
 

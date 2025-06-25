@@ -220,7 +220,12 @@ public struct TTSRequest: Codable, Sendable {
         numGenerations: Int? = nil,
         splitUtterances: Bool? = nil,
         stripHeaders: Bool? = nil
-    ) {
+    ) throws {
+        // Validate all utterances
+        for utterance in utterances {
+            try Validation.validateTextLength(utterance.text, maxLength: Validation.maxTTSTextLength, fieldName: "TTS text")
+        }
+        
         self.utterances = utterances
         self.format = format
         self.numGenerations = numGenerations
@@ -234,12 +239,18 @@ public struct TTSRequest: Codable, Sendable {
         voice: VoiceSpecification? = nil,
         description: String? = nil,
         speed: Double? = nil
-    ) {
+    ) throws {
+        // Validate text
+        try Validation.validateTextLength(text, maxLength: Validation.maxTTSTextLength, fieldName: "TTS text")
+        
+        // Validate and clamp speed if provided
+        let validatedSpeed = speed.map { Validation.validateSpeakingRate($0) }
+        
         let utterance = PostedUtterance(
             text: text,
             voice: voice,
             description: description,
-            speed: speed
+            speed: validatedSpeed
         )
         self.utterances = [utterance]
         self.format = nil
@@ -334,7 +345,7 @@ public class TTSRequestBuilder {
             trailingSilence: trailingSilenceValue
         )
         
-        return TTSRequest(
+        return try! TTSRequest(
             utterances: [utterance],
             format: format,
             numGenerations: nil,
@@ -437,3 +448,99 @@ public struct VoicesResponse: Codable, Sendable {
 
 /// Paged voices response (alias for internal use)
 public typealias PagedVoicesResponse = VoicesResponse
+// MARK: - Streaming Types
+
+/// Chunk of data from TTS streaming
+public struct TTSStreamChunk: Codable, Sendable {
+    public let type: StreamChunkType
+    public let data: StreamChunkData?
+    public let error: String?
+    public let done: Bool?
+    
+    public enum StreamChunkType: String, Codable, Sendable {
+        case audio = "audio"
+        case metadata = "metadata"
+        case error = "error"
+        case done = "done"
+    }
+}
+
+/// Data within a stream chunk
+public enum StreamChunkData: Codable, Sendable {
+    case audio(AudioChunk)
+    case metadata(MetadataChunk)
+    
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case audio
+        case metadata
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        if container.contains(.audio) {
+            let audioData = try container.decode(AudioChunk.self, forKey: .audio)
+            self = .audio(audioData)
+        } else if container.contains(.metadata) {
+            let metadataData = try container.decode(MetadataChunk.self, forKey: .metadata)
+            self = .metadata(metadataData)
+        } else {
+            throw DecodingError.dataCorrupted(DecodingError.Context(
+                codingPath: decoder.codingPath,
+                debugDescription: "Unknown stream chunk data type"
+            ))
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        
+        switch self {
+        case .audio(let chunk):
+            try container.encode("audio", forKey: .type)
+            try container.encode(chunk, forKey: .audio)
+        case .metadata(let chunk):
+            try container.encode("metadata", forKey: .type)
+            try container.encode(chunk, forKey: .metadata)
+        }
+    }
+}
+
+/// Audio chunk in streaming response
+public struct AudioChunk: Codable, Sendable {
+    /// Base64 encoded audio data
+    public let data: String
+    /// Audio format
+    public let format: String?
+    /// Sample rate
+    public let sampleRate: Int?
+    /// Duration in milliseconds
+    public let durationMs: Int?
+    
+    private enum CodingKeys: String, CodingKey {
+        case data
+        case format
+        case sampleRate = "sample_rate"
+        case durationMs = "duration_ms"
+    }
+}
+
+/// Metadata chunk in streaming response
+public struct MetadataChunk: Codable, Sendable {
+    /// Text being synthesized
+    public let text: String?
+    /// Voice used
+    public let voice: String?
+    /// Total duration
+    public let totalDurationMs: Int?
+    /// Character count
+    public let characterCount: Int?
+    
+    private enum CodingKeys: String, CodingKey {
+        case text
+        case voice
+        case totalDurationMs = "total_duration_ms"
+        case characterCount = "character_count"
+    }
+}
